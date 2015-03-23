@@ -29,6 +29,7 @@ typedef guint32 (*WapiThreadStart)(gpointer);
 extern gsize GetCurrentThreadId(void); /* NB return is 32bit in MS API */
 extern void Sleep(guint32 ms);
 extern guint32 SleepEx(guint32 ms, gboolean alertable);
+extern gboolean wapi_thread_apc_pending (gpointer handle);
 
 void wapi_interrupt_thread (gpointer handle);
 void wapi_clear_interruption (void);

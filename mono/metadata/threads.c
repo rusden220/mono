@@ -4604,12 +4604,16 @@ abort_thread_critical (MonoThreadInfo *info, gpointer ud)
 	gboolean protected_wrapper;
 	gboolean running_managed;
 
-	if (mono_get_eh_callbacks ()->mono_install_handler_block_guard (mono_thread_info_get_suspend_state (info)))
-		return MonoResumeThread;
-
 	/*someone is already interrupting it*/
 	if (InterlockedCompareExchange (&thread->interruption_requested, 1, 0) == 1)
 		return MonoResumeThread;
+
+	if ((thread->state & ThreadState_WaitSleepJoin) != 0 && !wapi_thread_apc_pending (thread->handle))
+		goto done;
+
+	if (mono_get_eh_callbacks ()->mono_install_handler_block_guard (mono_thread_info_get_suspend_state (info))) {
+		return MonoResumeThread;
+	}
 
 	InterlockedIncrement (&thread_interruption_requested);
 
@@ -4628,6 +4632,7 @@ abort_thread_critical (MonoThreadInfo *info, gpointer ud)
 			/* The JIT will notify the thread about the interruption */
 			mono_thread_notify_pending_exc_fn (info);
 
+done:
 		/* 
 		 * This will cause waits to be broken.
 		 * It will also prevent the thread from entering a wait, so if the thread returns
