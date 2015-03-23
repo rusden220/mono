@@ -64,11 +64,29 @@ namespace System.Runtime.Remoting {
 			UpdateChannelInfo();
 		}
 
-		internal ObjRef (string typeName, string uri, IChannelInfo cinfo) 
+		internal ObjRef (string typeName, string uri, IChannelInfo cinfo)
+		: this (Type.GetType (typeName, true), uri, cinfo)
+		{
+		}
+
+		internal ObjRef (Type derivedType, string uri, IChannelInfo cinfo)
 		{
 			this.uri = uri;
 			channel_info = cinfo;
-			typeInfo = new TypeInfo (Type.GetType (typeName, true));
+			typeInfo = new TypeInfo (derivedType);
+		}
+
+		internal ObjRef (ObjRef o, Type baseType, string uri, IChannelInfo cinfo) 
+		{
+			this.uri = uri;
+			channel_info = cinfo;
+			TypeInfo tInfo = o.typeInfo as TypeInfo;
+
+			// Doesn't seem possible from current use
+			if (tInfo == null)
+				throw new ArgumentException ("ObjRef clone constructor only applicable with cloneable TypeInfos.");
+
+			typeInfo = tInfo.Clone (baseType);
 		}
 
 		internal ObjRef (ObjRef o, bool unmarshalAsProxy) {

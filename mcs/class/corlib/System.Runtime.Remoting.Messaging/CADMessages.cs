@@ -51,7 +51,7 @@ namespace System.Runtime.Remoting.Messaging {
 	}
 	
 	internal class CADObjRef {
-		ObjRef objref;
+		internal ObjRef objref;
 		public int SourceDomain;
 
 		public CADObjRef (ObjRef o, int sourceDomain) {
@@ -252,19 +252,23 @@ namespace System.Runtime.Remoting.Messaging {
 
 			CADObjRef objref = arg as CADObjRef;
 			if (null != objref) {
-				string typeName;
-
-				if (argType != null) {
-					typeName = string.Copy (argType.AssemblyQualifiedName);
-				} else {
-					typeName = string.Copy (objref.TypeName);
-				}
 
 				string uri = string.Copy (objref.URI);
 				int domid = objref.SourceDomain;
-				
 				ChannelInfo cinfo = new ChannelInfo (new CrossAppDomainData (domid));
-				ObjRef localRef = new ObjRef (typeName, uri, cinfo);
+
+				ObjRef localRef;
+
+				Type derivedType = Type.GetType (objref.TypeName, false);
+				if (derivedType != null) {
+					localRef = new ObjRef (derivedType, uri, cinfo);
+				} else {
+					if (argType == null)
+						throw new TypeLoadException (objref.TypeName, (String)null);
+
+					localRef = new ObjRef (objref.objref, argType, uri, cinfo);
+				}
+
 				return RemotingServices.Unmarshal (localRef);
 			}
 			

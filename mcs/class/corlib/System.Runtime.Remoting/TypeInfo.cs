@@ -79,6 +79,34 @@ namespace System.Runtime.Remoting
 			}
 		}
 
+		internal TypeInfo (string serverType, string[] serverHierarchy,
+		                   string[] interfacesImplemented)
+		{
+			this.serverType = serverType;
+			this.serverHierarchy = serverHierarchy;
+			this.interfacesImplemented = interfacesImplemented;
+		}
+
+		// This method creates a new TypeInfo which will report itself as
+		// the type newType but has all of the interfaces and the class hierarchy
+		// reported. This will allow the object with the new TypeInfo to be cast
+		// or treated as any type valid for the original type, but does not require that
+		// potentially unavailable types be loaded.
+		internal TypeInfo Clone (Type newType)
+		{
+			var pseudoType = newType.AssemblyQualifiedName;
+
+			var hierarchy = new string [this.serverHierarchy.Length];
+			for (int i = 0; i < hierarchy.Length; i++)
+				hierarchy [i] = string.Copy (this.serverHierarchy [i]);
+
+			var interfaces = new string [this.interfacesImplemented.Length];
+			for (int i = 0; i < interfaces.Length; i++)
+				interfaces [i] = string.Copy (this.interfacesImplemented [i]);
+
+			return new TypeInfo (pseudoType, hierarchy, interfaces);
+		}
+
 		public string TypeName 
 		{
 			get { return serverType; }

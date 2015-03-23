@@ -331,6 +331,15 @@ namespace System.Runtime.Remoting.Channels
 			return mem;
 		}
 
+		internal static object DeserializeObjectSafe(byte[] mem)
+		{
+			byte [] outstream = new byte [mem.Length];
+			Array.Copy (mem, outstream, mem.Length);
+			MemoryStream objStream = new MemoryStream (outstream);
+			var returnVal = DeserializeObject (objStream);
+			return returnVal;
+		}
+
 		internal static object DeserializeObject(MemoryStream mem)
 		{
 			BinaryFormatter serializer = new BinaryFormatter();                
