@@ -56,11 +56,36 @@ struct _MonoMemPool {
 	guint32 allocated;
 };
 #else
+
+// Size in bytes
+#define DEFAULT_ENABLED_CANARY_COUNT 12
+static size_t canary_count = 0;
+static char canary_value = 42;
+
+// Enable to check all canaries every allocation.
+// It is very slow.
+// #define CHECK_MEMPOOL_CANARIES_ON_ALLOCATION
+
+// Suspend the runtime when an invalid mempool canary
+// is found so that a debugger can attach to it.
+// #define SUSPEND_ON_BROKEN_MEMPOOL_CANARY
+
+// Store information seperately so corruption doesn't end in
+// automatic sigsegv
+typedef struct _AllocRecord AllocRecord;
+struct _AllocRecord {
+	gpointer object;
+	char *padding;
+	AllocRecord *next;
+};
+
+
 struct _MonoMemPool {
 	MonoMemPool *next;
 	gint rest;
 	guint8 *pos, *end;
 	guint32 size;
+	AllocRecord *alloc_records;
 	union {
 		double pad; /* to assure proper alignment */
 		guint32 allocated;
@@ -93,6 +118,9 @@ mono_mempool_new_size (int initial_size)
 	pool = g_malloc (initial_size);
 
 	pool->next = NULL;
+
+	pool->alloc_records = NULL;
+
 	pool->pos = (guint8*)pool + SIZEOF_MEM_POOL;
 	pool->end = pool->pos + initial_size - SIZEOF_MEM_POOL;
 	pool->d.allocated = pool->size = initial_size;
@@ -254,6 +282,93 @@ get_next_size (MonoMemPool *pool, int size)
 #endif
 
 /**
+ * mono_mempool_enable_canaries:
+ *
+ * Enable placing canaries between allocations
+ */
+
+void
+mono_mempool_enable_canaries (void)
+{
+	canary_count = DEFAULT_ENABLED_CANARY_COUNT;
+	return;
+}
+
+/**
+ * mono_mempool_check_canaries:
+ *
+ * Check that our canaries are still alive.
+ */
+
+void
+mono_mempool_check_canaries (MonoMemPool *pool)
+{
+	if (canary_count == 0)
+		return;
+
+#ifdef MALLOC_ALLOCATION
+	for (Chunk* c = pool->chunks; c != NULL; c++) {
+		gpointer start = c + sizeof(Chunk) + c->size;
+
+		// The end should be the value stored at the start of the canary
+		assert(*end == start + PADDING_COUNT + 1);
+
+		for (gpointer addr = start; addr < start + PADDING_COUNT; addr++) {
+		    assert(*addr == CANARY_VALUE);
+		}
+	}
+#else
+	MonoMemPool *curr_pool;
+	AllocRecord *curr;
+
+	for (curr_pool = pool; curr_pool != NULL; curr_pool = curr_pool->next) {
+		for (curr = curr_pool->alloc_records; curr != NULL; curr = curr->next) {
+			for (int i=0; i < canary_count; i++){
+#if SUSPEND_ON_BROKEN_MEMPOOL_CANARY
+				guint8 addr_value = curr->padding[i];
+				if (addr_value != CANARY_VALUE)
+				{
+					fprintf (stderr, "Attach! Invalid canary value as %p != %p at %p\n", addr_value, CANARY_VALUE, addr);
+					while (1) { g_usleep(3); }
+				}
+#else
+				g_debug ("Checking canary at %p\n", &(curr->padding[i]));
+				if (curr->padding[i] != canary_value)
+				    g_error ("Invalid canary value at %p.\n", &(curr->padding[i]));
+#endif
+			}
+		}
+	}
+#endif
+}
+
+/**
+ * mono_mempool_install_canaries:
+ *
+ * Install the canaries into a given allocation block
+ */
+
+void
+mono_mempool_install_canaries (MonoMemPool *pool, guint8 **rval, guint obj_size)
+{
+	AllocRecord *alloc_record;
+	alloc_record = g_malloc (sizeof (AllocRecord));
+	alloc_record->object = rval;
+
+	alloc_record->next = pool->alloc_records;
+	pool->alloc_records = alloc_record;
+
+	for (int i=0; i < canary_count; i++) {
+		/*fprintf (stderr, "Writing canary to %p\n", &(alloc_record->padding[i]));*/
+		alloc_record->padding[i] = canary_value;
+	}
+
+#if CHECK_MEMPOOL_CANARIES_ON_ALLOCATION
+	mono_mempool_check_canaries (pool);
+#endif
+}
+
+/**
  * mono_mempool_alloc:
  * @pool: the momory pool to use
  * @size: size of the momory block
@@ -263,10 +378,15 @@ get_next_size (MonoMemPool *pool, int size)
  * Returns: the address of a newly allocated memory block.
  */
 gpointer
-mono_mempool_alloc (MonoMemPool *pool, guint size)
+mono_mempool_alloc (MonoMemPool *pool, guint requested_size)
 {
 	gpointer rval;
 
+	guint size = requested_size;
+	if (size == 0)
+		size = 1;
+
+	size += canary_count * sizeof(guint8 *);
 	size = ALIGN_SIZE (size);
 
 #ifdef MALLOC_ALLOCATION
@@ -297,14 +417,17 @@ mono_mempool_alloc (MonoMemPool *pool, guint size)
 			np->next = pool->next;
 			pool->next = np;
 			np->pos = (guint8*)np + SIZEOF_MEM_POOL;
+			np->alloc_records = NULL;
 			np->size = SIZEOF_MEM_POOL + size;
 			np->end = np->pos + np->size - SIZEOF_MEM_POOL;
 			pool->d.allocated += SIZEOF_MEM_POOL + size;
 			total_bytes_allocated += SIZEOF_MEM_POOL + size;
-			return (guint8*)np + SIZEOF_MEM_POOL;
+
+			rval = (guint8*)np + SIZEOF_MEM_POOL;
 		} else {
 			int new_size = get_next_size (pool, size);
 			MonoMemPool *np = g_malloc (new_size);
+			np->alloc_records = NULL;
 			np->next = pool->next;
 			pool->next = np;
 			pool->pos = (guint8*)np + SIZEOF_MEM_POOL;
@@ -321,6 +444,9 @@ mono_mempool_alloc (MonoMemPool *pool, guint size)
 	}
 #endif
 
+	if (canary_count > 0)
+		mono_mempool_install_canaries (pool, rval, requested_size);
+
 	return rval;
 }
 
@@ -334,22 +460,28 @@ mono_mempool_alloc0 (MonoMemPool *pool, guint size)
 {
 	gpointer rval;
 
+	guint size_with_canaries = size + canary_count * sizeof(guint8 *);
+
 #ifdef MALLOC_ALLOCATION
 	rval = mono_mempool_alloc (pool, size);
 #else
-	size = ALIGN_SIZE (size);
+	size_with_canaries = ALIGN_SIZE (size_with_canaries);
 
 	rval = pool->pos;
-	pool->pos = (guint8*)rval + size;
+	pool->pos = (guint8*)rval + size_with_canaries;
 
 	if (G_UNLIKELY (pool->pos >= pool->end)) {
+		// Don't double-pad with canaries
 		rval = mono_mempool_alloc (pool, size);
-	}
+	} else {
 #ifdef TRACE_ALLOCATIONS
-	else if (pool == mono_get_corlib ()->mempool) {
+	if (pool == mono_get_corlib ()->mempool) {
 		mono_backtrace (size);
 	}
 #endif
+		if (canary_count > 0)
+			mono_mempool_install_canaries (pool, rval, size);
+	}
 #endif
 
 	memset (rval, 0, size);

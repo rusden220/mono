@@ -60,4 +60,7 @@ g_slist_append_mempool (MonoMemPool *mp, GSList *list, gpointer data)
 long
 mono_mempool_get_bytes_allocated (void);
 
+void
+mono_mempool_install_canaries (MonoMemPool *pool, guint8 **rval, guint obj_size);
+
 #endif
