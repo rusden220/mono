@@ -3770,46 +3770,63 @@ mono_class_setup_vtable_full (MonoClass *class, GList *in_setup)
 	int onum = 0;
 	gboolean ok = TRUE;
 
+	MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 	if (class->vtable)
 		return;
+	MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 
+	MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 	if (MONO_CLASS_IS_INTERFACE (class)) {
 		/* This sets method->slot for all methods if this is an interface */
 		mono_class_setup_methods (class);
+		MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 		return;
 	}
 
+	MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 	if (class->exception_type)
 		return;
+	MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 
+	MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 	if (g_list_find (in_setup, class))
 		return;
+	MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 
 	mono_loader_lock ();
 
+	MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 	if (class->vtable) {
 		mono_loader_unlock ();
 		return;
 	}
+	MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 
 	mono_stats.generic_vtable_count ++;
 	in_setup = g_list_prepend (in_setup, class);
 
+	MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 	if (class->generic_class) {
+		MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 		if (!mono_class_check_vtable_constraints (class, in_setup)) {
+			MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 			mono_loader_unlock ();
 			g_list_remove (in_setup, class);
 			return;
 		}
 
+		MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 		context = mono_class_get_context (class);
 		type_token = class->generic_class->container_class->type_token;
 	} else {
+		MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 		context = (MonoGenericContext *) class->generic_container;		
 		type_token = class->type_token;
 	}
 
+	MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 	if (image_is_dynamic (class->image)) {
+		MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 		/* Generic instances can have zero method overrides without causing any harm.
 		 * This is true since we don't do layout all over again for them, we simply inflate
 		 * the layout of the parent.
@@ -3826,6 +3843,7 @@ mono_class_setup_vtable_full (MonoClass *class, GList *in_setup)
 	else
 		mono_class_set_failure (class, MONO_EXCEPTION_TYPE_LOAD, g_strdup ("Could not load list of method overrides"));
 		
+	MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 	g_free (overrides);
 
 	mono_loader_unlock ();
@@ -4258,6 +4276,7 @@ mono_class_need_stelemref_method (MonoClass *class)
 void
 mono_class_setup_vtable_general (MonoClass *class, MonoMethod **overrides, int onum, GList *in_setup)
 {
+	MOSTLY_ASYNC_SAFE_PRINTF ("%s :: %d -- class: %p\n", __FILE__, __LINE__, class);
 	MonoError error;
 	MonoClass *k, *ic;
 	MonoMethod **vtable;
