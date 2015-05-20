@@ -549,6 +549,12 @@ guint32 WaitForMultipleObjectsEx(guint32 numobjects, gpointer *handles,
 		_wapi_handle_ops_prewait (handles[i]);
 	}
 
+	if (bogustype == TRUE) {
+		DEBUG ("%s: Returning due to bogus type", __func__);
+
+		return(WAIT_FAILED);
+	}
+
 	qsort (sorted_handles, numobjects, sizeof (gpointer), g_direct_equal);
 	for (i = 1; i < numobjects; i++) {
 		if (sorted_handles [i - 1] == sorted_handles [i]) {
@@ -559,12 +565,6 @@ guint32 WaitForMultipleObjectsEx(guint32 numobjects, gpointer *handles,
 
 	if (duplicate == TRUE) {
 		DEBUG ("%s: Returning due to duplicates", __func__);
-
-		return(WAIT_FAILED);
-	}
-
-	if (bogustype == TRUE) {
-		DEBUG ("%s: Returning due to bogus type", __func__);
 
 		return(WAIT_FAILED);
 	}
