@@ -253,4 +253,7 @@ void mono_thread_join (gpointer tid);
 
 void mono_thread_detach_internal (MonoInternalThread *thread);
 
+extern void mono_install_clear_abort_threshold (void (*fun) (void));
+extern void mono_install_above_abort_threshold (gboolean (*fun) (void));
+
 #endif /* _MONO_METADATA_THREADS_TYPES_H_ */

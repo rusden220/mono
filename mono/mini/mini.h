@@ -1078,6 +1078,14 @@ typedef struct {
 	 * Stores if we need to run a chained exception in Windows.
 	 */
 	gboolean mono_win_chained_exception_needs_run;
+
+	/*
+	 * The stack frame "high water mark" for ThreadAbortExceptions.
+	 * We will rethrow the exception upon exiting a catch clause that's
+	 * in a function stack frame above the water mark(isn't being called by
+	 * the catch block that caught the ThreadAbortException).
+	 */
+	gpointer abort_exc_stack_threshold;
 } MonoJitTlsData;
 
 /*
