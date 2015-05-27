@@ -95,8 +95,8 @@ namespace System.Threading {
 		 * These fields are used to avoid having to increment corlib versions
 		 * when a new field is added to the unmanaged MonoThread structure.
 		 */
+		private IntPtr abort_exc_stack_threshold;
 		private IntPtr unused1;
-		private IntPtr unused2;
 		#endregion
 #pragma warning restore 169, 414, 649
 

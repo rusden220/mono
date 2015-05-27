@@ -3510,6 +3510,17 @@ mono_threads_clear_cached_culture (MonoDomain *domain)
 	mono_threads_unlock ();
 }
 
+void mono_install_above_abort_threshold (gboolean (*fun) (void))
+{
+	mono_above_abort_threshold = fun;
+}
+
+
+void mono_install_set_abort_threshold_here (void (*fun) (void))
+{
+	mono_set_abort_threshold_here = fun;
+}
+
 /*
  * mono_thread_get_undeniable_exception:
  *
@@ -3521,17 +3532,24 @@ mono_thread_get_undeniable_exception (void)
 {
 	MonoInternalThread *thread = mono_thread_internal_current ();
 
-	if (thread && thread->abort_exc && !is_running_protected_wrapper ()) {
-		/*
-		 * FIXME: Clear the abort exception and return an AppDomainUnloaded 
-		 * exception if the thread no longer references a dying appdomain.
-		 */
-		thread->abort_exc->trace_ips = NULL;
-		thread->abort_exc->stack_trace = NULL;
-		return thread->abort_exc;
-	}
+	if (!(thread && thread->abort_exc && !is_running_protected_wrapper ()))
+		return NULL;
 
-	return NULL;
+	g_assert (thread->abort_exc_stack_threshold);
+
+	// We don't want to have our exception effect calls made by
+	// the catching block
+
+	if (!mono_above_abort_threshold ())
+		return NULL;
+
+	/*
+	 * FIXME: Clear the abort exception and return an AppDomainUnloaded 
+	 * exception if the thread no longer references a dying appdomain.
+	 */ 
+	thread->abort_exc->trace_ips = NULL;
+	thread->abort_exc->stack_trace = NULL;
+	return thread->abort_exc;
 }
 
 #if MONO_SMALL_CONFIG

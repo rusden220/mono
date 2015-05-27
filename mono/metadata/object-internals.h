@@ -423,8 +423,8 @@ struct _MonoInternalThread {
 	 * Please synchronize any changes with InternalThread in Thread.cs, i.e. add the
 	 * same field there.
 	 */
+	gpointer abort_exc_stack_threshold;
 	gpointer unused1;
-	gpointer unused2;
 };
 
 struct _MonoThread {
