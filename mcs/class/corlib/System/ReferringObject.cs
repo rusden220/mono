@@ -32,7 +32,7 @@ namespace System
 {
 	[Serializable]
 	[StructLayout(LayoutKind.Sequential)]
-	internal class ReferringObject 
+	public class ReferringObject 
 	{
 		ulong ptr_offset;
 		Object referring_object;

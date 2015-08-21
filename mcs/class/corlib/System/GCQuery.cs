@@ -30,9 +30,9 @@ using System.Runtime.CompilerServices;
 
 namespace System
 {
-	internal static class GCQuery
+	public static class GCQuery
 	{
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
-		extern static internal void GetReferringObjects (Object obj, out ReferringObject [] refs);
+		extern static public void GetReferringObjects (Object obj, out ReferringObject [] refs);
 	}
 }

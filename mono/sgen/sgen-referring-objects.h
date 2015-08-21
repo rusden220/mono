@@ -3,8 +3,13 @@
 
 #include <glib.h>
 #include <sgen/sgen-pointer-queue.h>
+#include <sgen/sgen-gc.h>
+//#include <metadata/sgen-client-mono.h>
 
 typedef struct _ReferringObjectTuple ReferringObjectTuple;
+typedef struct _SgenThreadInfo SgenThreadInfo;
+typedef struct _RootRecord RootRecord;
+typedef MonoObject GCObject;
 
 typedef void (*RootProcessor) (ReferringObjectTuple *ref);
 
@@ -23,6 +28,7 @@ typedef enum {
 	REFERENCE_KIND_THREAD_STACK = 3,
 	REFERENCE_KIND_THREAD_REG = 4
 } ReferenceKind;
+
 
 typedef struct {
 	SgenThreadInfo *info;
