@@ -1167,24 +1167,25 @@ arch_emit_specific_trampoline_pages (MonoAotCompile *acfg)
 	guint8 *code;
 	guint8 *loop_start, *loop_branch_back, *loop_end_check, *imt_found_check;
 	int i;
+	int pagesize = MONO_AOT_TRAMP_PAGE_SIZE;
 #define COMMON_TRAMP_SIZE 16
-	int count = (mono_pagesize () - COMMON_TRAMP_SIZE) / 8;
+	int count = (pagesize - COMMON_TRAMP_SIZE) / 8;
 	int imm8, rot_amount;
 	char symbol [128];
 
 	if (!acfg->aot_opts.use_trampolines_page)
 		return;
 
-	acfg->tramp_page_size = mono_pagesize ();
+	acfg->tramp_page_size = pagesize;
 
 	sprintf (symbol, "%sspecific_trampolines_page", acfg->user_symbol_prefix);
-	emit_alignment (acfg, mono_pagesize ());
+	emit_alignment (acfg, pagesize);
 	emit_global (acfg, symbol, TRUE);
 	emit_label (acfg, symbol);
 
 	/* emit the generic code first, the trampoline address + 8 is in the lr register */
 	code = buf;
-	imm8 = mono_arm_is_rotated_imm8 (mono_pagesize (), &rot_amount);
+	imm8 = mono_arm_is_rotated_imm8 (pagesize, &rot_amount);
 	ARM_SUB_REG_IMM (code, ARMREG_LR, ARMREG_LR, imm8, rot_amount);
 	ARM_LDR_IMM (code, ARMREG_R1, ARMREG_LR, -8);
 	ARM_LDR_IMM (code, ARMREG_PC, ARMREG_LR, -4);
@@ -1212,7 +1213,7 @@ arch_emit_specific_trampoline_pages (MonoAotCompile *acfg)
 	emit_global (acfg, symbol, TRUE);
 	emit_label (acfg, symbol);
 	code = buf;
-	imm8 = mono_arm_is_rotated_imm8 (mono_pagesize (), &rot_amount);
+	imm8 = mono_arm_is_rotated_imm8 (pagesize, &rot_amount);
 	ARM_SUB_REG_IMM (code, ARMREG_IP, ARMREG_IP, imm8, rot_amount);
 	ARM_LDR_IMM (code, MONO_ARCH_RGCTX_REG, ARMREG_IP, -8);
 	ARM_LDR_IMM (code, ARMREG_PC, ARMREG_IP, -4);
@@ -1239,7 +1240,7 @@ arch_emit_specific_trampoline_pages (MonoAotCompile *acfg)
 	emit_label (acfg, symbol);
 	code = buf;
 	ARM_PUSH (code, (1 << ARMREG_R0) | (1 << ARMREG_R1) | (1 << ARMREG_R2) | (1 << ARMREG_R3));
-	imm8 = mono_arm_is_rotated_imm8 (mono_pagesize (), &rot_amount);
+	imm8 = mono_arm_is_rotated_imm8 (pagesize, &rot_amount);
 	ARM_SUB_REG_IMM (code, ARMREG_IP, ARMREG_IP, imm8, rot_amount);
 	ARM_LDR_IMM (code, ARMREG_R0, ARMREG_IP, -8);
 	ARM_LDR_IMM (code, ARMREG_PC, ARMREG_IP, -4);
@@ -1269,7 +1270,7 @@ arch_emit_specific_trampoline_pages (MonoAotCompile *acfg)
 	/* Need at least two free registers, plus a slot for storing the pc */
 	ARM_PUSH (code, (1 << ARMREG_R0)|(1 << ARMREG_R1)|(1 << ARMREG_R2));
 
-	imm8 = mono_arm_is_rotated_imm8 (mono_pagesize (), &rot_amount);
+	imm8 = mono_arm_is_rotated_imm8 (pagesize, &rot_amount);
 	ARM_SUB_REG_IMM (code, ARMREG_IP, ARMREG_IP, imm8, rot_amount);
 	ARM_LDR_IMM (code, ARMREG_R0, ARMREG_IP, -8);
 
@@ -5395,7 +5396,6 @@ static void
 emit_method_info (MonoAotCompile *acfg, MonoCompile *cfg)
 {
 	MonoMethod *method;
-	GList *l;
 	int pindex, buf_size, n_patches;
 	GPtrArray *patches;
 	MonoJumpInfo *patch_info;
@@ -5428,16 +5428,7 @@ emit_method_info (MonoAotCompile *acfg, MonoCompile *cfg)
 		/* Not needed when loading the method */
 		encode_value (0, p, &p);
 
-	/* String table */
-	if (cfg->opt & MONO_OPT_SHARED) {
-		encode_value (g_list_length (cfg->ldstr_list), p, &p);
-		for (l = cfg->ldstr_list; l; l = l->next) {
-			encode_value ((long)l->data, p, &p);
-		}
-	}
-	else
-		/* Used only in shared mode */
-		g_assert (!cfg->ldstr_list);
+	g_assert (!(cfg->opt & MONO_OPT_SHARED));
 
 	n_patches = 0;
 	for (pindex = 0; pindex < patches->len; ++pindex) {
@@ -5722,34 +5713,8 @@ emit_exception_debug_info (MonoAotCompile *acfg, MonoCompile *cfg, gboolean stor
 		p += p2 - buf2;
 		g_free (buf2);
 
-		if (gsctx && (gsctx->var_is_vt || gsctx->mvar_is_vt)) {
-			MonoMethodInflated *inflated;
-			MonoGenericContext *context;
-			MonoGenericInst *inst;
-
-			g_assert (jinfo->d.method->is_inflated);
-			inflated = (MonoMethodInflated*)jinfo->d.method;
-			context = &inflated->context;
-
+		if (gsctx && gsctx->is_gsharedvt) {
 			encode_value (1, p, &p);
-			if (context->class_inst) {
-				inst = context->class_inst;
-
-				encode_value (inst->type_argc, p, &p);
-				for (i = 0; i < inst->type_argc; ++i)
-					encode_value (gsctx->var_is_vt [i], p, &p);
-			} else {
-				encode_value (0, p, &p);
-			}
-			if (context->method_inst) {
-				inst = context->method_inst;
-
-				encode_value (inst->type_argc, p, &p);
-				for (i = 0; i < inst->type_argc; ++i)
-					encode_value (gsctx->mvar_is_vt [i], p, &p);
-			} else {
-				encode_value (0, p, &p);
-			}
 		} else {
 			encode_value (0, p, &p);
 		}
@@ -6211,8 +6176,6 @@ emit_trampolines (MonoAotCompile *acfg)
 			emit_trampoline (acfg, acfg->got_offset, info);
 		}
 
-		mono_arch_get_nullified_class_init_trampoline (&info);
-		emit_trampoline (acfg, acfg->got_offset, info);
 #if defined(MONO_ARCH_MONITOR_OBJECT_REG)
 		mono_arch_create_monitor_enter_trampoline (&info, FALSE, TRUE);
 		emit_trampoline (acfg, acfg->got_offset, info);
@@ -7318,8 +7281,10 @@ execute_system (const char * command)
 	g_free (wstr);
 
 	g_free (command);
-#else
+#elif defined (HAVE_SYSTEM)
 	status = system (command);
+#else
+	g_assert_not_reached ();
 #endif
 
 	return status;
